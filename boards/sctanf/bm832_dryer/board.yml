@@ -1,0 +1,5 @@
+board:
+  name: bm832_dryer
+  vendor: sctanf
+  socs:
+    - name: nrf52810

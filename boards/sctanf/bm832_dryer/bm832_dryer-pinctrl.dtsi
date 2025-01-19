@@ -1,0 +1,35 @@
+&pinctrl {
+	i2c0_default: i2c0_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 0, 0)>,
+				<NRF_PSEL(TWIM_SCL, 0, 1)>;
+			bias-disable;
+		};
+	};
+
+	i2c0_sleep: i2c0_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 0, 0)>,
+				<NRF_PSEL(TWIM_SCL, 0, 1)>;
+			bias-disable;
+			low-power-enable;
+		};
+	};
+
+	pwm0_default: pwm0_default {
+		group1 {
+			psels = <NRF_PSEL(PWM_OUT0, 0, 18)>,
+				<NRF_PSEL(PWM_OUT1, 0, 16)>,
+				<NRF_PSEL(PWM_OUT2, 0, 12)>;
+		};
+	};
+
+	pwm0_sleep: pwm0_sleep {
+		group1 {
+			psels = <NRF_PSEL(PWM_OUT0, 0, 18)>,
+				<NRF_PSEL(PWM_OUT1, 0, 16)>,
+				<NRF_PSEL(PWM_OUT2, 0, 12)>;
+			low-power-enable;
+		};
+	};
+};

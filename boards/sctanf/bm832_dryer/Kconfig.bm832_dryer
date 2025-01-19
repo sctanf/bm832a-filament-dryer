@@ -1,0 +1,2 @@
+config BOARD_BM832_DRYER
+	select SOC_NRF52810_QFAA
