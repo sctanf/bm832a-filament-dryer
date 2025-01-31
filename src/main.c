@@ -30,10 +30,10 @@ static const struct adc_dt_spec adc_channels[] = {
 			     ADC_DT_SPEC_AND_COMMA)
 };
 
-static uint16_t NTC_value[4][NTC_TEMP_SIZE] = {0};
-static int8_t last_NTC_value[4] = {0};
+static uint16_t NTC_value[(ARRAY_SIZE(adc_channels))][NTC_TEMP_SIZE] = {0};
+static int8_t last_NTC_value[(ARRAY_SIZE(adc_channels))] = {0};
 
-static float NTC_temperature[4] = {0};
+static float NTC_temperature[(ARRAY_SIZE(adc_channels))] = {0};
 
 static float ntc_get_temperature_mV(float mV)
 {
@@ -51,11 +51,11 @@ static void adc_thread(void)
 		.buffer_size = sizeof(buf),
 	};
 
-	for (size_t i = 0U; i < ARRAY_SIZE(adc_channels); i++)
+	for (size_t i = 0U; i < (ARRAY_SIZE(adc_channels)); i++)
 		adc_channel_setup_dt(&adc_channels[i]);
 
 	while (1) {
-		for (size_t i = 0U; i < ARRAY_SIZE(adc_channels); i++)
+		for (size_t i = 0U; i < (ARRAY_SIZE(adc_channels)); i++)
 		{
 			int32_t val_mv;
 
@@ -94,14 +94,14 @@ static const struct gpio_dt_spec tachometers[] = {
 
 static struct gpio_callback tachometer_cb_data;
 
-static int64_t tachometer_time[5][TACHOMETER_TIME_SIZE] = {0};
-static int8_t last_tachometer_time[5] = {0};
+static int64_t tachometer_time[(ARRAY_SIZE(tachometers))][TACHOMETER_TIME_SIZE] = {0};
+static int8_t last_tachometer_time[(ARRAY_SIZE(tachometers))] = {0};
 
-static float fan_tachometer[5] = {0};
+static float fan_tachometer[(ARRAY_SIZE(tachometers))] = {0};
 
 static void tachometer_pulsed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-	for (size_t i = 0U; i < ARRAY_SIZE(tachometers); i++)
+	for (size_t i = 0U; i < (ARRAY_SIZE(tachometers)); i++)
 	{
 		if (pins & BIT(tachometers[i].pin))
 		{
@@ -115,7 +115,7 @@ static void fan_tachometer_thread(void)
 {
 	uint32_t tachometer_pins = 0;
 
-	for (size_t i = 0U; i < ARRAY_SIZE(tachometers); i++)
+	for (size_t i = 0U; i < (ARRAY_SIZE(tachometers)); i++)
 	{
 		gpio_pin_configure_dt(&tachometers[i], GPIO_INPUT);
 		gpio_pin_interrupt_configure_dt(&tachometers[i], GPIO_INT_EDGE_FALLING);
@@ -126,7 +126,7 @@ static void fan_tachometer_thread(void)
 
 	while (1)
 	{
-		for (size_t i = 0U; i < ARRAY_SIZE(tachometers); i++)
+		for (size_t i = 0U; i < (ARRAY_SIZE(tachometers)); i++)
 		{
 			if (k_uptime_ticks() - tachometer_time[i][last_tachometer_time[i]] > CONFIG_SYS_CLOCK_TICKS_PER_SEC / 20)
 			{
@@ -148,7 +148,7 @@ K_THREAD_DEFINE(fan_tachometer_thread_id, 512, fan_tachometer_thread, NULL, NULL
 /* PWM controls */
 
 #define FAN_PWM_MIN 0.25f
-#define FAN_PWM_MAX 0.35f /* not really */
+#define FAN_PWM_MAX 0.65f
 
 #define PELTIER_PWM_MIN 0.0f
 #define PELTIER_PWM_MAX 1.0f
@@ -161,7 +161,7 @@ static const struct pwm_dt_spec pwm_channels[] = {
 			     PWM_DT_SPEC_AND_COMMA)
 };
 
-static float pwm_duty[5] = {0};
+static float pwm_duty[(ARRAY_SIZE(pwm_channels))] = {0};
 
 static void fan_set_pwm(uint32_t id, float duty_cycle)
 {
@@ -214,18 +214,49 @@ static void sht_thread(void)
 
 K_THREAD_DEFINE(sht_thread_id, 1024, sht_thread, NULL, NULL, NULL, 6, 0, 0);
 
+/* MCU temperature */
+
+#if !DT_HAS_COMPAT_STATUS_OKAY(nordic_nrf_temp)
+#error "No nordic,nrf-temp compatible node found in the device tree"
+#endif
+
+static float mcu_temperature = 0;
+
+static void temp_thread(void)
+{
+	const struct device *const dev = DEVICE_DT_GET_ANY(nordic_nrf_temp);
+	struct sensor_value temp;
+
+	while (1)
+	{
+		if (sensor_sample_fetch(dev))
+		{
+			printf("Failed to fetch sample from nRF temperature device\n");
+			return;
+		}
+
+		sensor_channel_get(dev, SENSOR_CHAN_DIE_TEMP, &temp);
+
+		mcu_temperature = sensor_value_to_float(&temp);
+	}
+}
+
+K_THREAD_DEFINE(temp_thread_id, 512, temp_thread, NULL, NULL, NULL, 6, 0, 0);
+
 /* Dryer loop */
 
-#define CHAMBER_TARGET_TEMPERATURE 40.0f
-#define CHAMBER_TEMPERATURE_TOLERANCE 4.0f
-#define CHAMBER_TARGET_HUMIDITY 20.0f
-#define CHAMBER_HUMIDITY_TOLERANCE 3.0f
+#define AMBIENT_TEMPERATURE 25.0f
 
-#define CHAMBER_PELTIER_TARGET_TEMPERATURE 53.0f
+#define CHAMBER_TARGET_TEMPERATURE 43.0f
+#define CHAMBER_TEMPERATURE_TOLERANCE 0.5f
+#define CHAMBER_TARGET_HUMIDITY 20.0f
+#define CHAMBER_HUMIDITY_TOLERANCE 0.25f
+
+#define CHAMBER_PELTIER_TARGET_TEMPERATURE (CHAMBER_TARGET_TEMPERATURE + 14.0f)
 #define CHAMBER_PELTIER_TEMPERATURE_TOLERANCE 2.0f
 
-#define EXTERNAL_PELTIER_TARGET_TEMPERATURE 35.0f
-#define EXTERNAL_PELTIER_TEMPERATURE_TOLERANCE 2.0f
+#define EXTERNAL_PELTIER_TARGET_TEMPERATURE (AMBIENT_TEMPERATURE + 12.0f)
+#define EXTERNAL_PELTIER_TEMPERATURE_TOLERANCE 4.0f
 
 #define CHAMBER_PELTIER_HEATSINK_NTC 1
 #define EXTERNAL_PELTIER_HEATSINK_NTC 3
@@ -250,8 +281,9 @@ void dryer_thread(void)
 		duty = (1.0f - duty_int_temp) / 2.0f;
 		fan_set_pwm(CHAMBER_HEATING_FAN, duty);
 
-		duty = (1.0f + MAX(duty_int_temp, duty_int_hum)) / 2.0f;
-		fan_set_pwm(DEHUMIDIFIER_FAN, duty);
+//		duty = (1.0f + MAX(duty_int_temp, duty_int_hum)) / 2.0f;
+//		fan_set_pwm(DEHUMIDIFIER_FAN, duty);
+		fan_set_pwm(DEHUMIDIFIER_FAN, 0);
 
 		duty = (1.0f + duty_ext_ntc) / 2.0f;
 		fan_set_pwm(EXTERNAL_COOLING_FAN, duty);
@@ -259,8 +291,9 @@ void dryer_thread(void)
 		duty = (1.0f - MAX(duty_int_temp, duty_int_ntc)) / 2.0f;
 		peltier_set_pwm(CHAMBER_PELTIER, duty);
 
-		duty = (1.0f + MIN(duty_int_temp, duty_int_hum)) / 2.0f;
+		duty = (1.0f + MAX(duty_int_temp - 1.0f, duty_int_hum)) / 2.0f;
 		peltier_set_pwm(EXTERNAL_PELTIER, duty);
+//		fan_set_pwm(EXTERNAL_COOLING_FAN, duty);
 
 		k_sleep(K_MSEC(1));
 	}
@@ -294,7 +327,8 @@ int main(void)
 {
 	while (1)
 	{
-		printk("\nChamber Temperature: %.2f C\n", (double)sht_temperature);
+		printk("\nMCU Temperature: %.2f C\n", (double)mcu_temperature);
+		printk("Chamber Temperature: %.2f C\n", (double)sht_temperature);
 		printk("Chamber Humidity: %.2f%%\n", (double)sht_humidity);
 		for (int i = 0; i < 4; i++)
 			printk("%s: %.2f C\n", ntc_labels[i], (double)NTC_temperature[i]);
@@ -302,7 +336,7 @@ int main(void)
 			printk("%s: %.0f rpm\n", tach_labels[i], (double)fan_tachometer[i]);
 		for (int i = 0; i < 5; i++)
 			printk("%s: %.2f%%\n", pwm_labels[i], (double)(pwm_duty[i] * 100));
-		k_sleep(K_MSEC(100));
+		k_sleep(K_MSEC(1000));
 	}
 	return 0;
 }
