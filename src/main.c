@@ -149,9 +149,11 @@ K_THREAD_DEFINE(fan_tachometer_thread_id, 512, fan_tachometer_thread, NULL, NULL
 
 #define FAN_PWM_MIN 0.25f
 #define FAN_PWM_MAX 0.65f
+#define FAN_PWM_HYST 0.02f
 
 #define PELTIER_PWM_MIN 0.0f
 #define PELTIER_PWM_MAX 1.0f
+#define PELTIER_PWM_HYST 0.04f
 
 #define PWM_DT_SPEC_AND_COMMA(node_id, prop, idx) \
 	PWM_DT_SPEC_GET_BY_IDX(node_id, idx),
@@ -161,10 +163,18 @@ static const struct pwm_dt_spec pwm_channels[] = {
 			     PWM_DT_SPEC_AND_COMMA)
 };
 
+static float pwm_duty_hyst[(ARRAY_SIZE(pwm_channels))] = {0};
 static float pwm_duty[(ARRAY_SIZE(pwm_channels))] = {0};
 
 static void fan_set_pwm(uint32_t id, float duty_cycle)
 {
+	if (duty_cycle < pwm_duty_hyst[id] - FAN_PWM_HYST)
+		duty_cycle += FAN_PWM_HYST;
+	else if (duty_cycle > pwm_duty_hyst[id] + FAN_PWM_HYST)
+		duty_cycle -= FAN_PWM_HYST;
+	else
+		duty_cycle = pwm_duty_hyst[id];
+	pwm_duty_hyst[id] = duty_cycle;
 	duty_cycle = duty_cycle < 0 ? 0 : duty_cycle;
 	duty_cycle = duty_cycle > 1 ? 1 : duty_cycle;
 	duty_cycle = FAN_PWM_MIN + (FAN_PWM_MAX - FAN_PWM_MIN) * duty_cycle;
@@ -175,6 +185,13 @@ static void fan_set_pwm(uint32_t id, float duty_cycle)
 static void peltier_set_pwm(uint32_t id, float duty_cycle)
 {
 	id += 3;
+	if (duty_cycle < pwm_duty_hyst[id] - PELTIER_PWM_HYST)
+		duty_cycle += PELTIER_PWM_HYST;
+	else if (duty_cycle > pwm_duty_hyst[id] + PELTIER_PWM_HYST)
+		duty_cycle -= PELTIER_PWM_HYST;
+	else
+		duty_cycle = pwm_duty_hyst[id];
+	pwm_duty_hyst[id] = duty_cycle;
 	duty_cycle = duty_cycle < 0 ? 0 : duty_cycle;
 	duty_cycle = duty_cycle > 1 ? 1 : duty_cycle;
 	duty_cycle = PELTIER_PWM_MIN + (PELTIER_PWM_MAX - PELTIER_PWM_MIN) * duty_cycle;
